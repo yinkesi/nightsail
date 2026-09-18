@@ -17,9 +17,13 @@
     const headers = { 'Content-Type': 'application/json' };
     if (cfg.key) headers.Authorization = 'Bearer ' + cfg.key;
 
-    // 挂起保护：120s 无完成即中断，防止 busy 永久死锁
+    // 空闲超时保护：每收到一段流就重置计时，120s 无任何响应才中断（防止 busy 永久死锁，又不掐正常长流）
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 120000);
+    let timer = 0;
+    const bump = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => ctrl.abort(), 120000);
+    };
 
     const body = {
       model: cfg.model || 'default',
@@ -49,6 +53,7 @@
     };
 
     try {
+      bump();
       const res = await fetch(url, {
         method: 'POST', headers, body: JSON.stringify(body), signal: ctrl.signal
       });
@@ -68,6 +73,7 @@
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        bump(); // 流仍活跃，重置空闲计时
         buf += decoder.decode(value, { stream: true });
         let idx;
         while ((idx = buf.indexOf('\n')) >= 0) {
@@ -81,7 +87,7 @@
       if (!full) throw new Error('接口未返回任何内容。请检查模型名是否正确。');
       return full;
     } catch (err) {
-      if (ctrl.signal.aborted) throw new Error('请求超时（120 秒）或连接中断。请检查接口后重试。');
+      if (ctrl.signal.aborted) throw new Error('连接空闲超过 120 秒或被中断，请检查接口后重试。');
       throw err;
     } finally {
       clearTimeout(timer);

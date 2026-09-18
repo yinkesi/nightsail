@@ -63,16 +63,19 @@
   }
   function escHtml(s) { return MD.esc(s); }
 
-  // 流式渲染节流：高频 delta 下最多 ~16 次/秒，避免每 token 全量重排
+  // 流式渲染节流：高频 delta 下最多 ~16 次/秒，避免每 token 全量重排。
+  // cancel() 丢弃未 flush 的尾帧——错误路径必须先调它，否则半篇残文会覆盖错误提示
   function makeStreamer(render) {
     let last = 0, timer = 0, latest = '';
     const flush = () => { timer = 0; last = performance.now(); render(latest); };
-    return (text) => {
+    const push = (text) => {
       latest = text;
       const now = performance.now();
       if (now - last >= 60) { if (timer) { clearTimeout(timer); timer = 0; } flush(); }
       else if (!timer) timer = setTimeout(flush, 70);
     };
+    push.cancel = () => { if (timer) { clearTimeout(timer); timer = 0; } };
+    return push;
   }
 
   // 图标字形对读屏器是噪音（如 "rocket_launch"），统一屏蔽；动态模板里的已内联 aria-hidden
@@ -292,7 +295,7 @@
       Array.from(stepEls).forEach((el, i) => {
         el.className = 'step ' + (i < idx ? 'done' : i === idx ? 'run' : 'wait');
         const ic = el.querySelector('span');
-        if (i < idx) ic.outerHTML = '<span class="sym">check_circle</span>';
+        if (i < idx) ic.outerHTML = '<span class="sym" aria-hidden="true">check_circle</span>';
         else if (i === idx && !el.querySelector('.spinner')) ic.outerHTML = '<span class="spinner"></span>';
         const em = el.querySelector('em');
         if (em) em.textContent = i < idx ? '✓' : i === idx ? (note || '…') : '';
@@ -340,9 +343,10 @@
         setTimeout(() => finish(full), 250);
       } catch (err) {
         clearTimeout(tick);
+        stream.cancel();
         busy = false;
         setCrew(owner, 'idle');
-        stepsBox.innerHTML = `<div class="step"><span class="sym">merge_type</span><span>航段遇到风浪：<b>${escHtml(err.message)}</b></span></div>`;
+        stepsBox.innerHTML = `<div class="step"><span class="sym" aria-hidden="true">merge_type</span><span>航段遇到风浪：<b>${escHtml(err.message)}</b></span></div>`;
         out.classList.remove('streaming');
         out.innerHTML = '<p class="placeholder">本次未能生成。可重试，或到「罗盘」检查接口配置；也可以切换演示模式先看完整流程。</p>';
         store.logAdd('sys', `生成 ${stage.artifact} 失败：${escHtml(err.message)}`);
@@ -596,6 +600,7 @@
       setCrew('信号兵', 'done');
       busy = false;
       btn.classList.remove('is-busy');
+      out.classList.remove('streaming');
       $('#signal-status').textContent = '已归档 ' + new Date().toLocaleTimeString('zh-CN');
       $('#btn-copy-signal').disabled = false;
       refreshStats();
@@ -617,6 +622,7 @@
       } catch (err) {
         busy = false;
         btn.classList.remove('is-busy');
+        stream.cancel();
         out.classList.remove('streaming');
         $('#signal-status').textContent = '';
         out.innerHTML = `<p class="placeholder">发报失败：${escHtml(err.message)}</p>`;
@@ -635,7 +641,7 @@
   function renderKb() {
     const list = $('#kb-list');
     if (!store.kb.length) {
-      list.innerHTML = '<div class="mini-row"><span class="sym">description</span><small>舱内空空。粘贴课程讲义、访谈记录、竞品笔记试试。</small></div>';
+      list.innerHTML = '<div class="mini-row"><span class="sym" aria-hidden="true">description</span><small>舱内空空。粘贴课程讲义、访谈记录、竞品笔记试试。</small></div>';
       return;
     }
     list.innerHTML = store.kb.map(d => `
