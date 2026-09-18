@@ -9,13 +9,17 @@
    * 演示模式（未配置 base）由调用方自行走 NSDemo，本函数只走真实接口。
    * 返回完整文本；失败时 throw Error(带可读原因)。
    */
-  async function chat({ system, user, onDelta, signal, temperature }) {
+  async function chat({ system, user, onDelta, temperature }) {
     const cfg = store.cfg;
     if (!cfg.base) throw new Error('未配置引擎接口（当前为演示模式）');
 
     const url = cfg.base.replace(/\/+$/, '') + '/chat/completions';
     const headers = { 'Content-Type': 'application/json' };
     if (cfg.key) headers.Authorization = 'Bearer ' + cfg.key;
+
+    // 挂起保护：120s 无完成即中断，防止 busy 永久死锁
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 120000);
 
     const body = {
       model: cfg.model || 'default',
@@ -27,46 +31,61 @@
       ]
     };
 
-    const res = await fetch(url, {
-      method: 'POST', headers, body: JSON.stringify(body), signal
-    });
-
-    if (!res.ok) {
-      let detail = '';
-      try { detail = (await res.text()).slice(0, 200); } catch (e) { /* ignore */ }
-      if (res.status === 401) throw new Error('密钥被拒绝（401）。请到罗盘检查 API KEY。');
-      if (res.status === 404) throw new Error('接口路径不存在（404）。请检查 BASE URL 是否以 /v1 结尾、模型名是否正确。');
-      throw new Error(`接口返回 ${res.status}：${detail || '无详情'}`);
-    }
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = '';
+    // 单行 SSE 解析；遇到内容增量时累积 full 并回调
     let full = '';
+    const handleLine = (line) => {
+      const t = line.trim();
+      if (!t.startsWith('data:')) return;
+      const payload = t.slice(5).trim();
+      if (payload === '[DONE]') return;
+      try {
+        const json = JSON.parse(payload);
+        const delta = json.choices?.[0]?.delta?.content || '';
+        if (delta) {
+          full += delta;
+          onDelta && onDelta(delta, full);
+        }
+      } catch (e) { /* 忽略半包 */ }
+    };
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop();
-      for (const line of lines) {
-        const t = line.trim();
-        if (!t.startsWith('data:')) continue;
-        const payload = t.slice(5).trim();
-        if (payload === '[DONE]') continue;
-        try {
-          const json = JSON.parse(payload);
-          const delta = json.choices?.[0]?.delta?.content || '';
-          if (delta) {
-            full += delta;
-            onDelta && onDelta(delta, full);
-          }
-        } catch (e) { /* 忽略半包 */ }
+    try {
+      const res = await fetch(url, {
+        method: 'POST', headers, body: JSON.stringify(body), signal: ctrl.signal
+      });
+
+      if (!res.ok) {
+        let detail = '';
+        try { detail = (await res.text()).slice(0, 200); } catch (e) { /* ignore */ }
+        if (res.status === 401) throw new Error('密钥被拒绝（401）。请到罗盘检查 API KEY。');
+        if (res.status === 404) throw new Error('接口路径不存在（404）。请检查 BASE URL 是否以 /v1 结尾、模型名是否正确。');
+        throw new Error(`接口返回 ${res.status}：${detail || '无详情'}`);
       }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buf.indexOf('\n')) >= 0) {
+          handleLine(buf.slice(0, idx));
+          buf = buf.slice(idx + 1);
+        }
+      }
+      buf += decoder.decode();
+      if (buf.trim()) handleLine(buf); // 冲洗尾包
+
+      if (!full) throw new Error('接口未返回任何内容。请检查模型名是否正确。');
+      return full;
+    } catch (err) {
+      if (ctrl.signal.aborted) throw new Error('请求超时（120 秒）或连接中断。请检查接口后重试。');
+      throw err;
+    } finally {
+      clearTimeout(timer);
     }
-    if (!full) throw new Error('接口未返回任何内容。请检查模型名是否正确。');
-    return full;
   }
 
   /** 快速测试连接：发一条 1 token 的问候 */

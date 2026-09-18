@@ -40,6 +40,8 @@
 
   let busy = false;          // 全局生成互斥
   let curChannel = 'xiaohongshu';
+  const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const SCROLL = REDUCED ? 'auto' : 'smooth';
 
   /* ═══ 工具 ═══ */
   let toastTimer = 0;
@@ -52,13 +54,31 @@
     toastTimer = setTimeout(() => { el.hidden = true; }, 3200);
   }
   function download(filename, text, mime) {
+    const safe = filename.replace(/[\\/:*?"<>|]/g, '_');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([text], { type: mime || 'text/plain;charset=utf-8' }));
-    a.download = filename;
+    a.download = safe;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   }
   function escHtml(s) { return MD.esc(s); }
+
+  // 流式渲染节流：高频 delta 下最多 ~16 次/秒，避免每 token 全量重排
+  function makeStreamer(render) {
+    let last = 0, timer = 0, latest = '';
+    const flush = () => { timer = 0; last = performance.now(); render(latest); };
+    return (text) => {
+      latest = text;
+      const now = performance.now();
+      if (now - last >= 60) { if (timer) { clearTimeout(timer); timer = 0; } flush(); }
+      else if (!timer) timer = setTimeout(flush, 70);
+    };
+  }
+
+  // 图标字形对读屏器是噪音（如 "rocket_launch"），统一屏蔽；动态模板里的已内联 aria-hidden
+  function a11ySweep(root) {
+    $$('.sym, .sym-svg', root).forEach(el => el.setAttribute('aria-hidden', 'true'));
+  }
 
   // 卡片鼠标追光
   document.addEventListener('pointermove', (e) => {
@@ -73,7 +93,7 @@
   function go(view) {
     $$('.view').forEach(v => v.classList.toggle('is-on', v.id === 'view-' + view));
     $$('.rail-item').forEach(b => b.classList.toggle('is-on', b.dataset.nav === view));
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: SCROLL });
     refreshDock();
     if (view === 'signal') requestAnimationFrame(moveGlider);
     if (view === 'logbook') renderLog();
@@ -102,8 +122,9 @@
       const pill = st === 'run' ? '<span class="pill pill-run"><i></i>工作中</span>'
         : st === 'done' ? '<span class="pill pill-done"><i></i>已交付</span>'
           : '<span class="pill pill-wait"><i></i>在岗</span>';
-      return `<div class="agent"><span class="agent-ic"><span class="sym">${c.ic}</span></span><div><b>${c.name}</b><small>${c.role}</small></div>${pill}</div>`;
+      return `<div class="agent"><span class="agent-ic"><span class="sym" aria-hidden="true">${c.ic}</span></span><div><b>${c.name}</b><small>${c.role}</small></div>${pill}</div>`;
     }).join('');
+    a11ySweep($('#crew-roster'));
   }
   function setCrew(ownerKey, state) {
     CREW.forEach(c => {
@@ -149,13 +170,31 @@
   }
 
   /* ═══ 起航仪式 ═══ */
+  let lastFocus = null;
   function openOnboard(prefill) {
+    if (busy) { toast('船员正在工作，稍候再起航新项目', true); return; }
+    lastFocus = document.activeElement;
     $('#on-name').value = prefill && prefill.name || '';
     $('#on-pitch').value = prefill && prefill.pitch || '';
     $('#onboard-scrim').hidden = false;
+    document.body.classList.add('modal-open');
     setTimeout(() => $('#on-name').focus(), 60);
   }
-  function closeOnboard() { $('#onboard-scrim').hidden = true; }
+  function closeOnboard() {
+    $('#onboard-scrim').hidden = true;
+    document.body.classList.remove('modal-open');
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+  // Esc 关闭 + Tab 焦点圈定在弹窗内
+  $('#onboard-scrim').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { closeOnboard(); return; }
+    if (e.key !== 'Tab') return;
+    const items = $$('#onboard-scrim button, #onboard-scrim input, #onboard-scrim textarea, #onboard-scrim select').filter(el => !el.disabled && el.offsetParent !== null);
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) { last.focus(); e.preventDefault(); }
+    else if (!e.shiftKey && document.activeElement === last) { first.focus(); e.preventDefault(); }
+  });
 
   $$('.onboard-chips .chip').forEach(chip => {
     chip.addEventListener('click', () => {
@@ -168,14 +207,20 @@
   $('#onboard-scrim').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeOnboard(); });
 
   $('#btn-onboard-go').addEventListener('click', () => {
+    if (busy) { toast('船员正在工作，稍候再起航新项目', true); return; }
     const name = $('#on-name').value.trim() || '未命名的船';
     const pitch = $('#on-pitch').value.trim();
     if (!pitch) { toast('给船一个航向：一句话说明她为谁解决什么问题', true); $('#on-pitch').focus(); return; }
     store.newProject(name, pitch);
+    // 重置跨项目残留状态
+    Object.keys(crewState).forEach(k => { crewState[k] = 'idle'; });
+    openId = null;
     store.logAdd('user', `为 <b>${escHtml(name)}</b> 举行起航仪式，航向：${escHtml(pitch)}`);
     store.logAdd('sys', `船员就位（军师·侦察官·船匠·信号兵·舵手）。建议首航先生成 <b>01 立意 · 航前会</b>。`);
     closeOnboard();
+    renderCrew();
     renderStages();
+    refreshDock();
     refreshBridge();
     go('voyage');
     toast('启航！军师开始起草航前会…');
@@ -216,8 +261,8 @@
 
   async function genStage(stageId) {
     const proj = store.proj;
-    if (!proj || busy) return;
-    const stage = STAGES.find(s => s.id === stageId);
+    const stage = proj ? STAGES.find(s => s.id === stageId) : null;
+    if (!proj || !stage || busy) return;
     busy = true;
     const owner = stage.ownerIc === 'forum' ? '信号兵' : stage.owner.split('·')[0];
     setCrew(owner, 'run');
@@ -238,8 +283,9 @@
       ['舵手·AI', '质检口径，签收归档']
     ];
     stepsBox.innerHTML = stepDefs.map((s, i) =>
-      `<div class="step ${i === 0 ? 'run' : 'wait'}"><span class="${i === 0 ? 'spinner' : 'sym'}">${i === 0 ? '' : 'check_circle'}</span><span><b>${escHtml(s[0])}</b> · ${escHtml(s[1])}</span><span class="bar"><i></i></span><em>${i === 0 ? '…' : ''}</em></div>`
+      `<div class="step ${i === 0 ? 'run' : 'wait'}"><span class="${i === 0 ? 'spinner' : 'sym'}" aria-hidden="true">${i === 0 ? '' : 'check_circle'}</span><span><b>${escHtml(s[0])}</b> · ${escHtml(s[1])}</span><span class="bar"><i></i></span><em>${i === 0 ? '…' : ''}</em></div>`
     ).join('');
+    a11ySweep(stepsBox);
     const stepEls = stepsBox.children;
 
     function setStep(idx, note) {
@@ -270,17 +316,23 @@
     if (store.isDemo()) {
       setStep(1, 'draft');
       const full = Demo[DEMO_FN[stageId]](proj.name, proj.pitch);
-      typewriter(full,
-        (t) => { out.innerHTML = MD.render(t); },
-        () => { setStep(2, '✓'); setTimeout(() => finish(full), 350); });
+      const stream = makeStreamer((t) => { out.innerHTML = MD.render(t); });
+      if (REDUCED) {
+        stream(full);
+        setStep(2, '✓');
+        finish(full);
+      } else {
+        typewriter(full, stream, () => { setStep(2, '✓'); setTimeout(() => finish(full), 350); });
+      }
     } else {
       let stepIdx = 0;
       const tick = setTimeout(() => { stepIdx = 1; setStep(1, 'draft'); }, 900);
+      const stream = makeStreamer((t) => { out.innerHTML = MD.render(t); });
       try {
         const full = await LLM.chat({
           system: '你是「夜航 NightSail」的船员 AI，服务一位大学生的一人公司（OPC）项目。用中文输出 Markdown，务实、具体、可执行，杜绝空话套话，正文控制在 1000 字内。不要用代码围栏包裹全文。',
           user: buildUserPrompt(stageId),
-          onDelta: (d, fullText) => { out.innerHTML = MD.render(fullText); },
+          onDelta: (d, fullText) => stream(fullText),
           temperature: store.cfg.temp
         });
         clearTimeout(tick);
@@ -311,11 +363,12 @@
     if (curIdx === -1) curIdx = 4;
     map.innerHTML = STAGES.map((s, i) => {
       const state = i < curIdx ? 'is-done' : i === curIdx ? 'is-cur' : '';
-      const icon = i < curIdx ? '<span class="sym">check_circle</span>' : s.no;
+      const icon = i < curIdx ? '<span class="sym" aria-hidden="true">check_circle</span>' : s.no;
       const link = i < STAGES.length - 1
         ? `<div class="route-link" style="--p:${i < curIdx ? 100 : 0}%"></div>` : '';
       return `<div class="route-node ${state}"><div class="route-dot">${icon}</div><div class="route-label">${s.name}</div></div>${link}`;
     }).join('');
+    a11ySweep(map);
   }
 
   let openId = null;   // 当前展开的航段
@@ -323,6 +376,7 @@
   function openStage(stageId) {
     openId = stageId;
     $$('.stage').forEach(el => el.classList.toggle('is-open', el.dataset.stage === stageId));
+    syncStageAria();
   }
 
   function artifactBody(stageId, text) {
@@ -349,9 +403,9 @@
            <button class="btn btn-ghost btn-sm" data-dl="${s.id}"><span class="sym">description</span>下载 .md</button>`
         : `<button class="btn btn-primary btn-sm" data-gen="${s.id}"><span class="sym">auto_awesome</span>起草${s.artifact}</button>`;
       return `<div class="stage ${state}" data-stage="${s.id}">
-        <div class="stage-head" data-open="${s.id}">
-          <span class="stage-no mono">${s.no}</span>
-          <span class="stage-ic"><span class="sym">${s.ic}</span></span>
+        <div class="stage-head" data-open="${s.id}" tabindex="0" role="button" aria-expanded="${openId === s.id}" aria-label="${s.no} ${s.name} · ${s.artifact}">
+          <span class="stage-no mono" aria-hidden="true">${s.no}</span>
+          <span class="stage-ic"><span class="sym" aria-hidden="true">${s.ic}</span></span>
           <div class="stage-tt"><b>${s.name} · ${s.artifact}</b><small>${s.desc}</small></div>
           <div class="stage-act">${pill}</div>
         </div>
@@ -365,17 +419,20 @@
         </div>
       </div>`;
     }).join('');
+    a11ySweep(wrap);
+  }
+
+  function syncStageAria() {
+    $$('.stage').forEach(el => {
+      const head = el.querySelector('[data-open]');
+      if (head) head.setAttribute('aria-expanded', String(el.classList.contains('is-open')));
+    });
   }
 
   $('#stages').addEventListener('click', (e) => {
     const head = e.target.closest('[data-open]');
     if (head && !e.target.closest('button')) {
-      const id = head.dataset.open;
-      const el = $(`.stage[data-stage="${id}"]`);
-      const was = el.classList.contains('is-open');
-      $$('.stage').forEach(x => x.classList.remove('is-open'));
-      if (!was) { el.classList.add('is-open'); openId = id; }
-      else openId = null;
+      toggleStage(head.dataset.open);
       return;
     }
     const gen = e.target.closest('[data-gen],[data-regen]');
@@ -388,6 +445,21 @@
       toast('已下载 .md');
     }
   });
+  $('#stages').addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const head = e.target.closest('[data-open]');
+    if (head && !e.target.closest('button')) { e.preventDefault(); toggleStage(head.dataset.open); }
+  });
+
+  function toggleStage(id) {
+    const el = $(`.stage[data-stage="${id}"]`);
+    if (!el) return;
+    const was = el.classList.contains('is-open');
+    $$('.stage').forEach(x => x.classList.remove('is-open'));
+    if (!was) { el.classList.add('is-open'); openId = id; }
+    else openId = null;
+    syncStageAria();
+  }
 
   /* ═══ 船坞 ═══ */
   function extractHtml(text) {
@@ -464,8 +536,13 @@
     toast('已下载 HTML');
   });
   $('#btn-open-landing').addEventListener('click', () => {
-    const url = URL.createObjectURL(new Blob([store.proj.landing.html], { type: 'text/html' }));
-    window.open(url, '_blank');
+    // 包一层沙箱 iframe 再开新窗：生成的页面脚本不可访问本应用 origin / localStorage
+    const html = store.proj.landing.html;
+    const wrapped = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>${escHtml(store.proj.name)}</title>` +
+      `<style>html,body{margin:0;height:100%;background:#0b0d13}iframe{border:0;width:100%;height:100%}</style></head>` +
+      `<body><iframe sandbox="allow-scripts allow-popups" srcdoc="${MD.esc(html)}"></iframe></body></html>`;
+    const url = URL.createObjectURL(new Blob([wrapped], { type: 'text/html' }));
+    window.open(url, '_blank', 'noopener');
   });
 
   /* ═══ 信号塔 ═══ */
@@ -484,6 +561,7 @@
   }
 
   $('#signal-tabs').addEventListener('click', (e) => {
+    if (busy) { toast('生成进行中，请等船员完工再切换渠道', true); return; }
     const tab = e.target.closest('.tab');
     if (!tab) return;
     curChannel = tab.dataset.ch;
@@ -501,6 +579,7 @@
     if (!proj) { toast('先完成起航仪式，信号兵才知道为哪条船发报', true); return; }
     if (busy) return;
     busy = true;
+    const ch = curChannel; // 生成期间锁定渠道，防止中途切 tab 串写
     const btn = $('#btn-gen-signal');
     btn.classList.add('is-busy');
     $('#signal-status').textContent = '信号兵·鸢 正在发报…';
@@ -509,10 +588,11 @@
     const out = $('#signal-out');
     out.classList.add('streaming');
     const kbctx = store.kbContext(`${proj.name} ${proj.pitch} 文案 渠道`);
+    const stream = makeStreamer((t) => { out.innerHTML = MD.render(t); });
     const finish = (text) => {
-      proj.signals[curChannel] = text;
+      proj.signals[ch] = text;
       store.saveProj();
-      store.logAdd('gen', `信号兵·鸢 发报 <b>${curChannel}</b> 文案（${text.length} 字）`);
+      store.logAdd('gen', `信号兵·鸢 发报 <b>${ch}</b> 文案（${text.length} 字）`);
       setCrew('信号兵', 'done');
       busy = false;
       btn.classList.remove('is-busy');
@@ -522,14 +602,15 @@
       toast('文案已归档，可复制 ✓');
     };
     if (store.isDemo()) {
-      const full = Demo.signalCopy(curChannel, proj.name, proj.pitch);
-      typewriter(full, (t) => { out.innerHTML = MD.render(t); }, () => finish(full));
+      const full = Demo.signalCopy(ch, proj.name, proj.pitch);
+      if (REDUCED) { stream(full); finish(full); }
+      else typewriter(full, stream, () => finish(full));
     } else {
       try {
         const full = await LLM.chat({
           system: '你是「夜航」的信号兵·鸢，负责推广文案。用中文 Markdown 输出正文，符合渠道语气，具体不空泛。不要用代码围栏。',
-          user: `项目名：${proj.name}\n一句话定位：${proj.pitch}\n\n请写${CHANNELS[curChannel].tone}。${kbctx}`,
-          onDelta: (d, fullText) => { out.innerHTML = MD.render(fullText); },
+          user: `项目名：${proj.name}\n一句话定位：${proj.pitch}\n\n请写${CHANNELS[ch].tone}。${kbctx}`,
+          onDelta: (d, fullText) => stream(fullText),
           temperature: store.cfg.temp
         });
         finish(full);
@@ -559,11 +640,12 @@
     }
     list.innerHTML = store.kb.map(d => `
       <div class="mini-row">
-        <span class="sym">description</span>
+        <span class="sym" aria-hidden="true">description</span>
         <b>${escHtml(d.title)}</b>
         <small>${d.chunks.length} 段 · ${d.text.length} 字</small>
         <button class="row-del" data-del="${d.id}">移出</button>
       </div>`).join('');
+    a11ySweep(list);
     refreshStats();
   }
   $('#btn-kb-add').addEventListener('click', () => {
@@ -685,6 +767,9 @@
 
   /* ═══ 首屏 ═══ */
   function init() {
+    // 存储写失败（配额满/隐私模式）时给出可见提示，不静默丢数据
+    store.onWriteError = () => toast('本机存储写入失败，数据可能未持久化', true);
+    a11ySweep(document); // 静态标记里的图标字形对读屏器是噪音
     renderCrew();
     renderStages();
     renderKb();

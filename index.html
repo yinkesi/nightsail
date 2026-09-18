@@ -39,13 +39,13 @@
 
 <!-- ═══ 左舷导航 ═══ -->
 <nav class="rail" aria-label="舱室导航">
-  <button class="rail-item is-on" data-nav="bridge"><span class="sym">dashboard</span><em>舰桥</em></button>
-  <button class="rail-item" data-nav="voyage"><span class="sym">merge_type</span><em>航线</em></button>
-  <button class="rail-item" data-nav="dock"><span class="sym">code_blocks</span><em>船坞</em></button>
-  <button class="rail-item" data-nav="signal"><span class="sym">forum</span><em>信号塔</em></button>
-  <button class="rail-item" data-nav="library"><span class="sym">description</span><em>藏书舱</em></button>
-  <button class="rail-item" data-nav="logbook"><span class="sym">history</span><em>航海志</em></button>
-  <button class="rail-item" data-nav="compass"><span class="sym-svg" data-icon="compass"></span><em>罗盘</em></button>
+  <button class="rail-item is-on" data-nav="bridge" aria-label="舰桥"><span class="sym" aria-hidden="true">dashboard</span><em>舰桥</em></button>
+  <button class="rail-item" data-nav="voyage" aria-label="航线"><span class="sym" aria-hidden="true">merge_type</span><em>航线</em></button>
+  <button class="rail-item" data-nav="dock" aria-label="船坞"><span class="sym" aria-hidden="true">code_blocks</span><em>船坞</em></button>
+  <button class="rail-item" data-nav="signal" aria-label="信号塔"><span class="sym" aria-hidden="true">forum</span><em>信号塔</em></button>
+  <button class="rail-item" data-nav="library" aria-label="藏书舱"><span class="sym" aria-hidden="true">description</span><em>藏书舱</em></button>
+  <button class="rail-item" data-nav="logbook" aria-label="航海志"><span class="sym" aria-hidden="true">history</span><em>航海志</em></button>
+  <button class="rail-item" data-nav="compass" aria-label="罗盘"><span class="sym-svg" data-icon="compass" aria-hidden="true"></span><em>罗盘</em></button>
   <div class="rail-foot mono" id="rail-foot">v1.0</div>
 </nav>
 
@@ -100,7 +100,7 @@
             </div>
             <div class="console-input" id="console-input">
               <span class="sym">smart_toy</span>
-              <input id="bridge-cmd" type="text" placeholder="说出你的点子，例如：校园二手教材循环平台…" autocomplete="off">
+              <input id="bridge-cmd" type="text" placeholder="说出你的点子，例如：校园二手教材循环平台…" autocomplete="off" aria-label="向船员下达快速指令">
               <kbd class="mono">⏎</kbd>
             </div>
           </div>
@@ -225,7 +225,7 @@
           <h3>检索试验台</h3>
           <p>看看某次生成任务会召回哪些段落——全部本地计算，可解释。</p>
           <div class="probe-row">
-            <input id="kb-probe-q" type="text" placeholder="输入查询，例如：学生愿意为二手教材付多少钱">
+            <input id="kb-probe-q" type="text" placeholder="输入查询，例如：学生愿意为二手教材付多少钱" aria-label="知识库检索查询">
             <button class="btn btn-ghost btn-sm" id="btn-kb-probe"><span class="sym">arrow_forward</span>检索</button>
           </div>
           <div id="kb-probe-out"></div>
@@ -281,7 +281,7 @@
           <select id="cfg-preset">
             <option value="demo">演示模式（离线，无需密钥）</option>
             <option value="local">本地 llama.cpp（127.0.0.1:8080）</option>
-            <option value="zhipu">智谱 BigFrame GLM（open.bigmodel.cn）</option>
+            <option value="zhipu">智谱 BigModel GLM（open.bigmodel.cn）</option>
             <option value="deepseek">DeepSeek（api.deepseek.com）</option>
             <option value="moonshot">Moonshot Kimi（api.moonshot.cn）</option>
             <option value="custom">自定义 OpenAI 兼容接口</option>
@@ -334,7 +334,7 @@
   </div>
 </div>
 
-<div class="toast mono" id="toast" hidden></div>
+<div class="toast mono" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="js/md.js"></script>
 <script src="js/store.js"></script>

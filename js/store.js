@@ -22,8 +22,13 @@
     } catch (e) { return fallback; }
   }
   function write(key, val) {
-    try { localStorage.setItem(key, JSON.stringify(val)); }
-    catch (e) { console.warn('[nightsail] 本地存储失败', e); }
+    try { localStorage.setItem(key, JSON.stringify(val)); return true; }
+    catch (e) {
+      console.warn('[nightsail] 本地存储写入失败', key, e);
+      // 供 UI 层挂接提示（如 toast），避免静默丢数据
+      if (typeof api.onWriteError === 'function') api.onWriteError(key);
+      return false;
+    }
   }
 
   /* ---- 配置 ---- */
@@ -106,19 +111,23 @@
   }
 
   /* ---- 航海志 ---- */
+  const LOG_MAX = 500; // 防止逼近 localStorage 配额
   let log = read(KEYS.log, []);
   function logAdd(type, html) {
     const entry = { t: Date.now(), type, html };
-    log.push(entry); write(KEYS.log, log);
+    log.push(entry);
+    if (log.length > LOG_MAX) log = log.slice(-LOG_MAX);
+    write(KEYS.log, log);
     return entry;
   }
   function logReset() { log = []; write(KEYS.log, log); }
 
   function logExport() {
+    const decode = (s) => { const el = document.createElement('textarea'); el.innerHTML = s; return el.value; };
     const lines = log.map(e => {
       const d = new Date(e.t);
       const ts = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-      const text = e.html.replace(/<[^>]+>/g, '');
+      const text = decode(e.html.replace(/<[^>]+>/g, ''));
       return `- \`${ts}\` **[${e.type}]** ${text}`;
     });
     return `# 夜航 NightSail · 航海志导出\n\n> 项目：${proj ? proj.name : '（无）'} · 导出于 ${new Date().toLocaleString('zh-CN')}\n\n${lines.join('\n')}\n`;
@@ -129,11 +138,12 @@
     cfg = Object.assign({}, PRESETS.demo); proj = null; kb = []; log = [];
   }
 
-  window.NSStore = {
+  const api = {
     PRESETS, get cfg() { return cfg; }, set cfg(v) { cfg = v; saveCfg(); },
-    saveCfg, isDemo,
+    saveCfg, isDemo, onWriteError: null,
     get proj() { return proj; }, newProject, saveProj,
     kbAdd, kbDel, kbSearch, kbContext, get kb() { return kb; },
     logAdd, logReset, logExport, get log() { return log; }, resetAll
   };
+  window.NSStore = api;
 })();

@@ -14,7 +14,11 @@
     s = s.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
     s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
-    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, text, url) => {
+      // 仅放行安全协议，拦截 javascript:/data: 等注入
+      if (!/^(https?:|mailto:|#|\/)/i.test(url)) return text;
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer nofollow">${text}</a>`;
+    });
     return s;
   }
 

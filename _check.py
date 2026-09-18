@@ -24,8 +24,12 @@ with sync_playwright() as p:
     page.wait_for_timeout(4500)  # 演示模式打字机
     page.screenshot(path=str(OUT / "02-voyage-gen.png"), full_page=True)
 
-    # 等生成完毕
+    # 等生成完毕，展开并起草第 02 段（侦察）
     page.wait_for_timeout(4000)
+    page.click('[data-open="scout"]')
+    page.wait_for_timeout(400)
+    page.click('[data-gen="scout"]')
+    page.wait_for_timeout(8000)
     page.screenshot(path=str(OUT / "03-voyage-done.png"), full_page=True)
 
     # 舰桥
@@ -59,10 +63,17 @@ with sync_playwright() as p:
     page.wait_for_timeout(500)
     page.screenshot(path=str(OUT / "07-library.png"), full_page=True)
 
-    # 航海志
+    # 航海志 + 导出下载断言
     page.click('.rail-item[data-nav="logbook"]')
     page.wait_for_timeout(400)
     page.screenshot(path=str(OUT / "08-logbook.png"), full_page=True)
+    with page.expect_download() as dl_info:
+        page.click("#btn-export-log")
+    dl = dl_info.value
+    exported = OUT / dl.suggested_filename
+    dl.save_as(str(exported))
+    assert exported.stat().st_size > 200, "航海志导出文件过小，导出链路异常"
+    print("EXPORT OK:", dl.suggested_filename, exported.stat().st_size, "bytes")
 
     # 罗盘
     page.click('.rail-item[data-nav="compass"]')
