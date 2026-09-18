@@ -1,0 +1,139 @@
+/* 夜航 store.js — 本机状态：设置 / 项目 / 产出物 / 知识库 / 航海志
+   全部存 localStorage，命名空间 nightsail: */
+(function () {
+  'use strict';
+
+  const NS = 'nightsail:';
+  const KEYS = { cfg: NS + 'cfg', proj: NS + 'proj', kb: NS + 'kb', log: NS + 'log' };
+
+  const PRESETS = {
+    demo:     { base: '', model: '', key: '', temp: 0.7 },
+    local:    { base: 'http://127.0.0.1:8080/v1', model: 'minicpm5', key: '', temp: 0.7 },
+    zhipu:    { base: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash', key: '', temp: 0.7 },
+    deepseek: { base: 'https://api.deepseek.com', model: 'deepseek-chat', key: '', temp: 0.7 },
+    moonshot: { base: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k', key: '', temp: 0.7 },
+    custom:   { base: '', model: '', key: '', temp: 0.7 }
+  };
+
+  function read(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (e) { return fallback; }
+  }
+  function write(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); }
+    catch (e) { console.warn('[nightsail] 本地存储失败', e); }
+  }
+
+  /* ---- 配置 ---- */
+  let cfg = read(KEYS.cfg, null) || Object.assign({}, PRESETS.demo);
+  function saveCfg() { write(KEYS.cfg, cfg); }
+  function isDemo() { return !cfg.base; }
+
+  /* ---- 项目 ---- */
+  // proj = { name, pitch, createdAt, stages:{brief,scout,build,launch,growth}, landing:{html,at}, signals:{ch:text} }
+  let proj = read(KEYS.proj, null);
+  function newProject(name, pitch) {
+    proj = {
+      name: name || '未命名的船', pitch: pitch || '',
+      createdAt: Date.now(),
+      stages: {}, signals: {}, landing: null
+    };
+    saveProj();
+    return proj;
+  }
+  function saveProj() { if (proj) write(KEYS.proj, proj); }
+
+  /* ---- 知识库 ---- */
+  let kb = read(KEYS.kb, []);
+  function saveKb() { write(KEYS.kb, kb); }
+
+  // 分段：优先按空行/标题切，再合并到 200–600 字
+  function chunkText(text) {
+    const paras = String(text).replace(/\r\n?/g, '\n')
+      .split(/\n\s*\n|\n(?=#{1,4}\s)/).map(s => s.trim()).filter(Boolean);
+    const chunks = [];
+    let buf = '';
+    for (const p of paras) {
+      if ((buf + '\n' + p).length > 600 && buf.length >= 200) { chunks.push(buf); buf = p; }
+      else buf = buf ? buf + '\n' + p : p;
+    }
+    if (buf) chunks.push(buf);
+    // 超长段落兜底硬切
+    const fin = [];
+    for (const c of chunks) {
+      for (let i = 0; i < c.length; i += 600) fin.push(c.slice(i, i + 600));
+    }
+    return fin;
+  }
+
+  function kbAdd(title, text) {
+    const doc = { id: 'kb' + Date.now().toString(36), title, addedAt: Date.now(), text, chunks: chunkText(text) };
+    kb.push(doc); saveKb();
+    return doc;
+  }
+  function kbDel(id) { kb = kb.filter(d => d.id !== id); saveKb(); }
+
+  // 检索：中文 bigram 重叠打分，取 top n
+  function bigrams(s) {
+    const t = s.toLowerCase().replace(/\s+/g, '');
+    const set = new Set();
+    for (let i = 0; i < t.length - 1; i++) set.add(t.slice(i, i + 2));
+    return set;
+  }
+  function kbSearch(query, n) {
+    n = n || 3;
+    const q = bigrams(query);
+    const hits = [];
+    for (const doc of kb) {
+      for (let ci = 0; ci < doc.chunks.length; ci++) {
+        const g = bigrams(doc.chunks[ci]);
+        let inter = 0;
+        g.forEach(x => { if (q.has(x)) inter++; });
+        const score = g.size ? inter / Math.sqrt(g.size) : 0;
+        if (score > 0.04) hits.push({ doc: doc.title, chunk: doc.chunks[ci], score });
+      }
+    }
+    hits.sort((a, b) => b.score - a.score);
+    return hits.slice(0, n);
+  }
+  function kbContext(query) {
+    const hits = kbSearch(query, 3);
+    if (!hits.length) return '';
+    return '\n\n【船内参考资料（来自知识库，仅作事实参考）】\n' +
+      hits.map((h, i) => `[资料${i + 1} · ${h.doc}] ${h.chunk}`).join('\n---\n');
+  }
+
+  /* ---- 航海志 ---- */
+  let log = read(KEYS.log, []);
+  function logAdd(type, html) {
+    const entry = { t: Date.now(), type, html };
+    log.push(entry); write(KEYS.log, log);
+    return entry;
+  }
+  function logReset() { log = []; write(KEYS.log, log); }
+
+  function logExport() {
+    const lines = log.map(e => {
+      const d = new Date(e.t);
+      const ts = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      const text = e.html.replace(/<[^>]+>/g, '');
+      return `- \`${ts}\` **[${e.type}]** ${text}`;
+    });
+    return `# 夜航 NightSail · 航海志导出\n\n> 项目：${proj ? proj.name : '（无）'} · 导出于 ${new Date().toLocaleString('zh-CN')}\n\n${lines.join('\n')}\n`;
+  }
+
+  function resetAll() {
+    Object.values(KEYS).forEach(k => localStorage.removeItem(k));
+    cfg = Object.assign({}, PRESETS.demo); proj = null; kb = []; log = [];
+  }
+
+  window.NSStore = {
+    PRESETS, get cfg() { return cfg; }, set cfg(v) { cfg = v; saveCfg(); },
+    saveCfg, isDemo,
+    get proj() { return proj; }, newProject, saveProj,
+    kbAdd, kbDel, kbSearch, kbContext, get kb() { return kb; },
+    logAdd, logReset, logExport, get log() { return log; }, resetAll
+  };
+})();

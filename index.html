@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>夜航 NightSail · 大学生一人公司 AI 舰桥</title>
+<meta name="description" content="夜航 NightSail —— 面向大学生的一人公司（OPC）AI 舰桥。一组专职 AI 船员，陪你从点子到上线。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%235b9dff'/%3E%3Cstop offset='.52' stop-color='%23b48ae0'/%3E%3Cstop offset='1' stop-color='%23e87f89'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M16 3 L25 21 L16 17 Z' fill='url(%23g)'/%3E%3Cpath d='M16 8 L8 21 L16 18 Z' fill='url(%23g)' opacity='.55'/%3E%3Cpath d='M5 24 Q16 30 27 24 L24 27 Q16 31 8 27 Z' fill='%23e9ebf3' opacity='.8'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/night.css">
+</head>
+<body>
+
+<!-- 氛围层：尘埃粒子 / 极光 / 暗角 / 颗粒 -->
+<canvas id="dustfield" class="dustfield" aria-hidden="true"></canvas>
+<div class="aurora" aria-hidden="true"></div>
+<div class="vignette" aria-hidden="true"></div>
+
+<!-- ═══ 顶栏 ═══ -->
+<header class="topbar" id="topbar">
+  <a class="brand" href="#" data-nav="bridge">
+    <svg class="brand-glyph" viewBox="0 0 32 32" aria-hidden="true">
+      <defs><linearGradient id="bg-grad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#5b9dff"/><stop offset=".52" stop-color="#b48ae0"/><stop offset="1" stop-color="#e87f89"/>
+      </linearGradient></defs>
+      <path d="M16 3 L25 21 L16 17 Z" fill="url(#bg-grad)"/>
+      <path d="M16 8 L8 21 L16 18 Z" fill="url(#bg-grad)" opacity=".55"/>
+      <path d="M5 24 Q16 30 27 24 L24 27 Q16 31 8 27 Z" fill="#e9ebf3" opacity=".8"/>
+    </svg>
+    <span>夜航 <i>NightSail</i></span>
+    <kbd class="brand-tag mono">OPC · AI 舰桥</kbd>
+  </a>
+  <div class="topbar-right">
+    <button class="conn-pill" id="conn-pill" data-tip="点击前往罗盘设置" title="点击前往罗盘设置">
+      <i class="dot"></i><span id="conn-text">演示模式</span>
+    </button>
+    <button class="icon-btn" data-nav="compass" title="罗盘 · 设置"><span class="sym-svg" data-icon="compass"></span></button>
+  </div>
+</header>
+
+<!-- ═══ 左舷导航 ═══ -->
+<nav class="rail" aria-label="舱室导航">
+  <button class="rail-item is-on" data-nav="bridge"><span class="sym">dashboard</span><em>舰桥</em></button>
+  <button class="rail-item" data-nav="voyage"><span class="sym">merge_type</span><em>航线</em></button>
+  <button class="rail-item" data-nav="dock"><span class="sym">code_blocks</span><em>船坞</em></button>
+  <button class="rail-item" data-nav="signal"><span class="sym">forum</span><em>信号塔</em></button>
+  <button class="rail-item" data-nav="library"><span class="sym">description</span><em>藏书舱</em></button>
+  <button class="rail-item" data-nav="logbook"><span class="sym">history</span><em>航海志</em></button>
+  <button class="rail-item" data-nav="compass"><span class="sym-svg" data-icon="compass"></span><em>罗盘</em></button>
+  <div class="rail-foot mono" id="rail-foot">v1.0</div>
+</nav>
+
+<!-- ═══ 主区 ═══ -->
+<main class="main" id="main">
+
+  <!-- ── 舰桥 ─────────────────────────────────── -->
+  <section class="view is-on" id="view-bridge">
+    <div class="bridge-hero">
+      <span class="eyebrow"><i class="dot"></i><span class="mono" id="bridge-eyebrow-text">NIGHTSAIL V1.0 · OPC READY</span></span>
+      <h1 class="hero-h1">一个人，<span class="h1-grad">也是一支舰队。</span></h1>
+      <p class="hero-sub" id="bridge-hero-sub">夜航是给大学生的一人公司舰桥：把创业拆成五段航线，军师、侦察官、船匠、信号兵各就各位——你只管掌舵，重活让 AI 船员漂起来。</p>
+      <div class="hero-cta">
+        <button class="btn btn-primary" id="btn-new-voyage"><span class="sym">rocket_launch</span>启航新项目</button>
+        <button class="btn btn-ghost" data-nav="voyage">查看航线<span class="sym">arrow_forward</span></button>
+      </div>
+      <p class="hero-note mono">本地优先 · 零服务器成本 · 数据不出本机 —— 2026「AI+教育」大学生AI创新创业组 · OPC AI Agent 赛道参赛作品</p>
+      <div class="chips" id="bridge-chips">
+        <span class="chip" style="--d:.0"><span class="sym">auto_awesome</span>五段航线工作流</span>
+        <span class="chip" style="--d:.12"><span class="sym">smart_toy</span>五位 AI 船员</span>
+        <span class="chip" style="--d:.24"><span class="sym">description</span>舱内知识库 RAG</span>
+        <span class="chip" style="--d:.36"><span class="sym">code_blocks</span>落地页直接生成</span>
+        <span class="chip" style="--d:.48"><span class="sym">shield</span>本地模型可跑</span>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat"><b id="stat-stage">0<i>/5</i></b><small>航线进度 · 已完成航段</small></div>
+      <div class="stat"><b id="stat-artifacts">0</b><small>产出物 · 策划书 / 报告 / 页面 / 文案</small></div>
+      <div class="stat"><b id="stat-days">0</b><small>航行天数 · 自项目启航起</small></div>
+      <div class="stat"><b id="stat-cost">¥0</b><small>启动成本 · 服务器与软件支出</small></div>
+    </div>
+
+    <!-- 代理控制台 -->
+    <div class="showcase">
+      <div class="console">
+        <div class="console-bar">
+          <i class="tl"></i><i class="tl"></i><i class="tl"></i>
+          <span class="console-title">nightsail://舰桥 — 船员在岗</span>
+          <span class="console-ver mono" id="console-model">demo mode</span>
+        </div>
+        <div class="console-body">
+          <aside class="console-side">
+            <div class="side-label mono">CREW · 船员花名册</div>
+            <div id="crew-roster"></div>
+            <div class="side-label mono side-gap">WATCH · 当前任务</div>
+            <div class="watch"><span class="sym">terminal</span><span id="watch-task">等待掌舵指令…</span></div>
+          </aside>
+          <div class="console-main">
+            <div id="console-steps">
+              <div class="step done"><span class="sym">check_circle</span><span>航线引擎就绪，知识库 <b id="kb-count">0</b> 份文档在舱</span></div>
+            </div>
+            <div class="console-input" id="console-input">
+              <span class="sym">smart_toy</span>
+              <input id="bridge-cmd" type="text" placeholder="说出你的点子，例如：校园二手教材循环平台…" autocomplete="off">
+              <kbd class="mono">⏎</kbd>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 航线 ─────────────────────────────────── -->
+  <section class="view" id="view-voyage">
+    <div class="view-head">
+      <span class="eyebrow"><i class="dot"></i><span class="mono">VOYAGE · 五段航线</span></span>
+      <h2>从点子到上线，<span class="grad-text">五段航程</span></h2>
+      <p class="lead" id="voyage-lead">每一段航线都由对应的船员负责起草，产出可直接使用的交付物。知识库资料会自动注入上下文。</p>
+    </div>
+    <div class="route-map" id="route-map"></div>
+    <div id="no-project" class="empty-card">
+      <div class="case-ic"><span class="sym">rocket_launch</span></div>
+      <h3>还没有项目在航</h3>
+      <p>点击下方按钮，给你的点子命名，30 秒完成起航仪式。</p>
+      <button class="btn btn-primary" id="btn-new-voyage-2"><span class="sym">auto_awesome</span>起航仪式</button>
+    </div>
+    <div class="stages" id="stages"></div>
+  </section>
+
+  <!-- ── 船坞 ─────────────────────────────────── -->
+  <section class="view" id="view-dock">
+    <div class="view-head">
+      <span class="eyebrow"><i class="dot"></i><span class="mono">DOCK · 落地页船坞</span></span>
+      <h2>让<span class="grad-text">船帆</span>先升起来</h2>
+      <p class="lead">船匠根据你的项目定位，现场造出一张可上线的单文件落地页——预览、下载、直接部署。</p>
+    </div>
+    <div class="dock-grid">
+      <div class="dock-side">
+        <div class="card">
+          <div class="card-ic"><span class="sym">code_blocks</span></div>
+          <h3>落地页工单</h3>
+          <p id="dock-brief">完成「起航仪式」后，船匠就能开工。</p>
+          <div class="dock-actions">
+            <button class="btn btn-primary btn-block" id="btn-gen-landing"><span class="sym">rocket_launch</span>生成落地页</button>
+            <div class="dock-row">
+              <button class="btn btn-ghost btn-sm" id="btn-download-landing" disabled><span class="sym">description</span>下载 HTML</button>
+              <button class="btn btn-ghost btn-sm" id="btn-open-landing" disabled><span class="sym">arrow_forward</span>新窗口打开</button>
+            </div>
+          </div>
+        </div>
+        <div class="mini-fleet">
+          <div class="mini-row"><span class="sym">check_circle</span><b>单文件</b><small>内联全部 CSS，零依赖</small></div>
+          <div class="mini-row"><span class="sym">smart_toy</span><b>文案即产</b><small>卖点与 CTA 由船员撰写</small></div>
+          <div class="mini-row"><span class="sym">shield</span><b>可私有部署</b><small>任意静态托管 / 校园网</small></div>
+        </div>
+      </div>
+      <div class="dock-preview">
+        <div class="showcase">
+          <div class="console">
+            <div class="console-bar">
+              <i class="tl"></i><i class="tl"></i><i class="tl"></i>
+              <span class="console-title" id="dock-preview-title">landing preview — 尚未开工</span>
+              <span class="console-ver mono" id="dock-preview-ver">idle</span>
+            </div>
+            <div class="dock-frame-wrap">
+              <iframe id="dock-frame" class="dock-frame" sandbox="allow-scripts" title="落地页预览"></iframe>
+              <div class="dock-placeholder" id="dock-placeholder">
+                <div class="case-ic"><span class="sym">code_blocks</span></div>
+                <p>生成后在这里实时预览</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 信号塔 ────────────────────────────────── -->
+  <section class="view" id="view-signal">
+    <div class="view-head">
+      <span class="eyebrow"><i class="dot"></i><span class="mono">SIGNAL · 推广信号塔</span></span>
+      <h2>让第一批<span class="grad-text">用户</span>听见你</h2>
+      <p class="lead">信号兵按渠道语气撰写发布文案。文案会带上你的项目定位与知识库里的素材。</p>
+    </div>
+    <div class="tab-bar" id="signal-tabs">
+      <div class="tab-glider" id="signal-glider"></div>
+      <button class="tab is-on" data-ch="xiaohongshu">小红书</button>
+      <button class="tab" data-ch="moments">朋友圈</button>
+      <button class="tab" data-ch="campus">校园公告</button>
+      <button class="tab" data-ch="zhihu">知乎</button>
+    </div>
+    <div class="signal-panel">
+      <div class="signal-toolbar">
+        <span class="mono signal-chip" id="signal-ch-label">CHANNEL · xiaohongshu</span>
+        <span class="signal-status mono" id="signal-status"></span>
+        <button class="btn btn-primary btn-sm" id="btn-gen-signal"><span class="sym">auto_awesome</span>生成文案</button>
+        <button class="btn btn-ghost btn-sm" id="btn-copy-signal" disabled><span class="sym">description</span>复制</button>
+      </div>
+      <div class="md-body signal-out" id="signal-out">
+        <p class="placeholder">选择渠道，点击「生成文案」。信号兵会先侦察定位，再动笔。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 藏书舱 ────────────────────────────────── -->
+  <section class="view" id="view-library">
+    <div class="view-head">
+      <span class="eyebrow"><i class="dot"></i><span class="mono">LIBRARY · 舱内知识库</span></span>
+      <h2>给船员<span class="grad-text">喂料</span></h2>
+      <p class="lead">课程讲义、访谈记录、竞品笔记、问卷数据……凡是文本都能入库。生成时自动检索最相关的段落注入上下文（本地 RAG，不外传）。</p>
+    </div>
+    <div class="lib-grid">
+      <div class="card lib-form">
+        <div class="card-ic"><span class="sym">description</span></div>
+        <h3>新增一份藏书</h3>
+        <label class="field"><span class="mono">TITLE · 标题</span><input id="kb-title" type="text" placeholder="例：30 份同学访谈记录"></label>
+        <label class="field"><span class="mono">CONTENT · 正文（支持长文）</span><textarea id="kb-content" rows="8" placeholder="粘贴文本内容……"></textarea></label>
+        <button class="btn btn-primary btn-block" id="btn-kb-add"><span class="sym">check_circle</span>入库</button>
+      </div>
+      <div class="lib-right">
+        <div class="lib-list-head">
+          <span class="side-label mono">COLLECTION · 藏书 <b id="kb-count-2">0</b> 册</span>
+        </div>
+        <div class="mini-fleet" id="kb-list"></div>
+        <div class="card lib-probe">
+          <h3>检索试验台</h3>
+          <p>看看某次生成任务会召回哪些段落——全部本地计算，可解释。</p>
+          <div class="probe-row">
+            <input id="kb-probe-q" type="text" placeholder="输入查询，例如：学生愿意为二手教材付多少钱">
+            <button class="btn btn-ghost btn-sm" id="btn-kb-probe"><span class="sym">arrow_forward</span>检索</button>
+          </div>
+          <div id="kb-probe-out"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 航海志 ────────────────────────────────── -->
+  <section class="view" id="view-logbook">
+    <div class="view-head">
+      <span class="eyebrow"><i class="dot"></i><span class="mono">LOGBOOK · 航海志</span></span>
+      <h2>每一次<span class="grad-text">转向</span>都有记录</h2>
+      <p class="lead">OPC 的护城河是迭代速度，而迭代速度要靠记录来证明。这里自动记下项目里的每个关键动作，可一键导出。</p>
+    </div>
+    <div class="log-grid">
+      <div class="console showcase log-console">
+        <div class="console-bar">
+          <i class="tl"></i><i class="tl"></i><i class="tl"></i>
+          <span class="console-title">nightsail://航海志 — append-only</span>
+          <span class="console-ver mono" id="log-count">0 entries</span>
+        </div>
+        <div class="log-body" id="log-body"></div>
+      </div>
+      <div class="log-side">
+        <button class="btn btn-ghost btn-block" id="btn-export-log"><span class="sym">description</span>导出航海志 .md</button>
+        <div class="card about-card">
+          <div class="card-ic"><span class="sym">shield</span></div>
+          <h3>本作品即证言</h3>
+          <p>夜航本身就是一个 OPC 案例：由<b>一名大学生与 AI 船员结对</b>，在零服务器成本、纯静态架构下完成开发与迭代。它的每一次生成、每一份文档，都在演示"一个人如何活成一支舰队"。</p>
+        </div>
+        <div class="card about-card">
+          <div class="card-ic"><span class="sym">auto_awesome</span></div>
+          <h3>参赛信息备忘</h3>
+          <p class="mono about-mono">赛道 · 大学生OPC创新创业AI Agent<br>组别 · 大学生AI创新创业组<br>作品提交截止 · 2026-10-15<br>材料 · 介绍文档 PDF + ≤10min 演示视频</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 罗盘 ─────────────────────────────────── -->
+  <section class="view" id="view-compass">
+    <div class="view-head">
+      <span class="eyebrow"><i class="dot"></i><span class="mono">COMPASS · 罗盘设置</span></span>
+      <h2>校准你的<span class="grad-text">AI 引擎</span></h2>
+      <p class="lead">接入任意 OpenAI 兼容接口（本地 llama.cpp / 智谱 / DeepSeek…），或直接使用演示模式离线体验。</p>
+    </div>
+    <div class="compass-grid">
+      <div class="card compass-form">
+        <div class="card-ic"><span class="sym">terminal</span></div>
+        <h3>引擎接口</h3>
+        <label class="field"><span class="mono">PRESET · 预设</span>
+          <select id="cfg-preset">
+            <option value="demo">演示模式（离线，无需密钥）</option>
+            <option value="local">本地 llama.cpp（127.0.0.1:8080）</option>
+            <option value="zhipu">智谱 BigFrame GLM（open.bigmodel.cn）</option>
+            <option value="deepseek">DeepSeek（api.deepseek.com）</option>
+            <option value="moonshot">Moonshot Kimi（api.moonshot.cn）</option>
+            <option value="custom">自定义 OpenAI 兼容接口</option>
+          </select>
+        </label>
+        <label class="field"><span class="mono">BASE URL</span><input id="cfg-base" type="text" placeholder="http://127.0.0.1:8080/v1"></label>
+        <label class="field"><span class="mono">API KEY（仅存本机 localStorage）</span><input id="cfg-key" type="password" placeholder="sk-…（本地服务可留空）"></label>
+        <label class="field"><span class="mono">MODEL</span><input id="cfg-model" type="text" placeholder="model name"></label>
+        <label class="field"><span class="mono">TEMPERATURE · <b id="cfg-temp-val">0.7</b></span><input id="cfg-temp" type="range" min="0" max="1.5" step="0.1" value="0.7"></label>
+        <div class="dock-row">
+          <button class="btn btn-primary" id="btn-cfg-save"><span class="sym">check_circle</span>保存并连接</button>
+          <button class="btn btn-ghost" id="btn-cfg-test"><span class="sym">arrow_forward</span>测试连接</button>
+        </div>
+        <p class="cfg-msg mono" id="cfg-msg"></p>
+      </div>
+      <div class="compass-side">
+        <div class="mini-fleet">
+          <div class="mini-row"><span class="sym">shield</span><b>密钥不出本机</b><small>仅存 localStorage，请求直发你所填的接口</small></div>
+          <div class="mini-row"><span class="sym">smart_toy</span><b>本地模型优先</b><small>llama.cpp / Ollama 均可，断网也能生成</small></div>
+          <div class="mini-row"><span class="sym">auto_awesome</span><b>演示模式</b><small>无接口时以脚本内容演示完整工作流</small></div>
+        </div>
+        <div class="card">
+          <h3>危险区</h3>
+          <p>清空本机保存的所有项目数据（产出物、藏书、航海志）。导出后再操作。</p>
+          <button class="btn btn-ghost btn-sm" id="btn-reset-all"><span class="sym">merge_type</span>清空全部数据</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ═══ 起航仪式弹窗 ═══ -->
+<div class="modal-scrim" id="onboard-scrim" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="onboard-title">
+    <span class="eyebrow"><i class="dot"></i><span class="mono">SET SAIL · 起航仪式</span></span>
+    <h2 id="onboard-title">给你的船<span class="grad-text">命名</span></h2>
+    <p class="modal-lead">两句话就够了：她是谁，为谁解决什么问题。剩下的交给船员。</p>
+    <label class="field"><span class="mono">船名 · 项目名</span><input id="on-name" type="text" maxlength="24" placeholder="例：课本漂流"></label>
+    <label class="field"><span class="mono">航向 · 一句话定位</span><textarea id="on-pitch" rows="3" placeholder="例：让毕业生的高价教材漂到学弟学妹手里，三折正版、扫码自取。"></textarea></label>
+    <div class="side-label mono">SAMPLE · 没有头绪？点一个示例点子</div>
+    <div class="chips onboard-chips">
+      <button class="chip" data-idea="0"><span class="sym">description</span>课本漂流 · 二手教材循环</button>
+      <button class="chip" data-idea="1"><span class="sym">forum</span>课程评价望远镜</button>
+      <button class="chip" data-idea="2"><span class="sym">auto_awesome</span>社团出海港 · 活动策划 AI</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btn-onboard-cancel">再想想</button>
+      <button class="btn btn-primary" id="btn-onboard-go"><span class="sym">rocket_launch</span>启航</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast mono" id="toast" hidden></div>
+
+<script src="js/md.js"></script>
+<script src="js/store.js"></script>
+<script src="js/demo.js"></script>
+<script src="js/llm.js"></script>
+<script src="js/dust.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
