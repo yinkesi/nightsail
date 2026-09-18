@@ -593,6 +593,73 @@ button.chip{cursor:pointer}
 }
 .stage-owner .sym{font-size:16px;color:var(--violet)}
 
+/* ---------- 证据引用 / 质检徽章 / 用量 ---------- */
+.md-body .cite{
+  cursor:pointer;color:var(--blue);font-family:var(--mono);
+  font-size:.72em;line-height:1;padding:1px 5px;margin:0 2px;
+  border:1px solid rgba(91,157,255,.4);border-radius:6px;
+  vertical-align:super;user-select:none;transition:background .2s;
+}
+.md-body .cite:hover{background:rgba(91,157,255,.14)}
+.md-body .unverified{
+  color:var(--pink);font-family:var(--mono);font-size:.72em;line-height:1;
+  padding:1px 6px;margin:0 2px;border:1px dashed rgba(232,127,137,.5);
+  border-radius:6px;vertical-align:super;user-select:none;
+}
+.cite-pop{
+  position:fixed;z-index:95;width:min(380px,92vw);
+  background:rgba(18,21,29,.96);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  border:1px solid rgba(91,157,255,.35);border-radius:var(--r-md);
+  box-shadow:var(--shadow-lift);padding:13px 15px;
+  font-size:12.5px;color:var(--ink-2);line-height:1.65;
+}
+.cite-pop .cite-meta{font-size:10.5px;letter-spacing:.08em;color:var(--ink-3);margin-bottom:8px}
+.cite-pop .cite-meta b{color:var(--blue)}
+.cite-pop .cite-chunk{color:var(--ink-2)}
+.cite-pop .cite-foot{margin-top:9px;font-size:10px;letter-spacing:.1em;color:var(--ink-3);opacity:.75}
+.qc-chip{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:3px 9px;border-radius:999px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.05em;
+  border:1px solid var(--line);color:var(--ink-2);background:rgba(8,9,13,.55);
+  white-space:nowrap;
+}
+.qc-chip b{color:var(--ink);font-weight:600}
+.qc-chip.warn{color:var(--pink);border-color:rgba(232,127,137,.45)}
+.qc-chip.warn b{color:var(--pink)}
+.usage-chip{font-size:10.5px;letter-spacing:.04em;color:var(--ink-3)}
+.revise-row{margin-top:12px;display:flex;justify-content:flex-end}
+
+/* 互审与质检盒 */
+details.review-box{
+  margin-top:14px;
+  border:1px solid var(--line-soft);
+  border-radius:var(--r-md);
+  background:rgba(8,9,13,.5);
+  overflow:hidden;
+}
+details.review-box summary{
+  cursor:pointer;list-style:none;
+  display:flex;align-items:center;gap:9px;
+  padding:12px 16px;font-size:13.5px;color:var(--ink-2);
+  transition:background .2s;user-select:none;
+}
+details.review-box summary::-webkit-details-marker{display:none}
+details.review-box summary:hover{background:rgba(233,235,243,.03)}
+details.review-box summary .sym{font-size:17px;color:var(--violet)}
+details.review-box summary b{color:var(--ink)}
+details.review-box[open] summary{border-bottom:1px solid var(--line-soft)}
+details.review-box .review-body{margin:0;border:0;border-radius:0;background:transparent;padding:16px 18px}
+
+/* 成本仪表盘 */
+.dash-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px;margin-top:6px}
+.dash-table th,.dash-table td{padding:5px 6px;text-align:right;border-bottom:1px solid var(--line-soft);white-space:nowrap}
+.dash-table th{color:var(--ink-3);font-weight:500;letter-spacing:.06em;text-transform:uppercase;font-size:9.5px}
+.dash-table td:first-child,.dash-table th:first-child{text-align:left}
+.dash-table .dash-dim{color:var(--ink-3);opacity:.5}
+.dash-table tfoot td{border-top:1px solid var(--line);border-bottom:0;color:var(--ink);font-weight:600}
+.dash-note{margin-top:10px;font-size:10px;color:var(--ink-3);line-height:1.6}
+
 /* ---------- markdown 正文 ---------- */
 .md-body{
   margin-top:14px;

@@ -7,12 +7,12 @@
   const KEYS = { cfg: NS + 'cfg', proj: NS + 'proj', kb: NS + 'kb', log: NS + 'log' };
 
   const PRESETS = {
-    demo:     { base: '', model: '', key: '', temp: 0.7 },
-    local:    { base: 'http://127.0.0.1:8080/v1', model: 'minicpm5', key: '', temp: 0.7 },
-    zhipu:    { base: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash', key: '', temp: 0.7 },
-    deepseek: { base: 'https://api.deepseek.com', model: 'deepseek-chat', key: '', temp: 0.7 },
-    moonshot: { base: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k', key: '', temp: 0.7 },
-    custom:   { base: '', model: '', key: '', temp: 0.7 }
+    demo:     { base: '', model: '', key: '', temp: 0.7, pin: 0, pout: 0 },
+    local:    { base: 'http://127.0.0.1:8080/v1', model: 'minicpm5', key: '', temp: 0.7, pin: 0, pout: 0 },
+    zhipu:    { base: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash', key: '', temp: 0.7, pin: 0, pout: 0 },
+    deepseek: { base: 'https://api.deepseek.com', model: 'deepseek-chat', key: '', temp: 0.7, pin: 2, pout: 8 },
+    moonshot: { base: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k', key: '', temp: 0.7, pin: 12, pout: 12 },
+    custom:   { base: '', model: '', key: '', temp: 0.7, pin: 0, pout: 0 }
   };
 
   function read(key, fallback) {
@@ -37,14 +37,23 @@
   function isDemo() { return !cfg.base; }
 
   /* ---- 项目 ---- */
-  // proj = { name, pitch, createdAt, stages:{brief,scout,build,launch,growth}, landing:{html,at}, signals:{ch:text} }
-  let proj = read(KEYS.proj, null);
+  // proj = { name, pitch, createdAt, stages:{id:text}, cites:{id:[{i,doc,chunk,score}]},
+  //          qc:{id:{scores,reviewer,issues,revised}}, reviews:{id:md},
+  //          usage:{byKey:{key:{calls,ms,tin,tout,cost,demo}}}, landing:{}, signals:{} }
+  function normalize(p) {
+    if (!p) return p;
+    p.stages = p.stages || {}; p.signals = p.signals || {};
+    p.cites = p.cites || {}; p.qc = p.qc || {}; p.reviews = p.reviews || {};
+    p.usage = p.usage || { byKey: {} };
+    if (!p.usage.byKey) p.usage.byKey = {};
+    return p;
+  }
+  let proj = normalize(read(KEYS.proj, null));
   function newProject(name, pitch) {
-    proj = {
+    proj = normalize({
       name: name || '未命名的船', pitch: pitch || '',
-      createdAt: Date.now(),
-      stages: {}, signals: {}, landing: null
-    };
+      createdAt: Date.now()
+    });
     saveProj();
     return proj;
   }
@@ -104,10 +113,17 @@
     return hits.slice(0, n);
   }
   function kbContext(query) {
-    const hits = kbSearch(query, 3);
-    if (!hits.length) return '';
-    return '\n\n【船内参考资料（来自知识库，仅作事实参考）】\n' +
-      hits.map((h, i) => `[资料${i + 1} · ${h.doc}] ${h.chunk}`).join('\n---\n');
+    return kbContextDetailed(query, 3).text;
+  }
+  // 带编号引用上下文：cites 供产物徽章回跳
+  function kbContextDetailed(query, n) {
+    n = n || 3;
+    const hits = kbSearch(query, n);
+    const text = hits.length
+      ? '\n\n【船内参考资料（事实以此为准，未覆盖处需标注 [待验证]）】\n' +
+        hits.map((h, i) => `[资料${i + 1} · ${h.doc}]\n${h.chunk}`).join('\n---\n')
+      : '';
+    return { text, cites: hits.map((h, i) => ({ i: i + 1, doc: h.doc, chunk: h.chunk, score: h.score })) };
   }
 
   /* ---- 航海志 ---- */

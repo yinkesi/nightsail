@@ -76,7 +76,7 @@
       <div class="stat"><b id="stat-stage">0<i>/5</i></b><small>航线进度 · 已完成航段</small></div>
       <div class="stat"><b id="stat-artifacts">0</b><small>产出物 · 策划书 / 报告 / 页面 / 文案</small></div>
       <div class="stat"><b id="stat-days">0</b><small>航行天数 · 自项目启航起</small></div>
-      <div class="stat"><b id="stat-cost">¥0</b><small>启动成本 · 服务器与软件支出</small></div>
+      <div class="stat"><b id="stat-cost">¥0</b><small id="stat-cost-label">实测 AI 成本 · 0 次调用</small></div>
     </div>
 
     <!-- 代理控制台 -->
@@ -252,6 +252,11 @@
       </div>
       <div class="log-side">
         <button class="btn btn-ghost btn-block" id="btn-export-log"><span class="sym">description</span>导出航海志 .md</button>
+        <div class="card">
+          <div class="card-ic"><span class="sym">terminal</span></div>
+          <h3>OPC 成本仪表盘</h3>
+          <div id="dash-body"></div>
+        </div>
         <div class="card about-card">
           <div class="card-ic"><span class="sym">shield</span></div>
           <h3>本作品即证言</h3>
@@ -291,6 +296,12 @@
         <label class="field"><span class="mono">API KEY（仅存本机 localStorage）</span><input id="cfg-key" type="password" placeholder="sk-…（本地服务可留空）"></label>
         <label class="field"><span class="mono">MODEL</span><input id="cfg-model" type="text" placeholder="model name"></label>
         <label class="field"><span class="mono">TEMPERATURE · <b id="cfg-temp-val">0.7</b></span><input id="cfg-temp" type="range" min="0" max="1.5" step="0.1" value="0.7"></label>
+        <label class="field"><span class="mono">费率 · ¥/1M tokens（输入 / 输出，用于成本仪表）</span>
+          <div class="dock-row">
+            <input id="cfg-pin" type="number" min="0" step="0.1" placeholder="输入，如 2">
+            <input id="cfg-pout" type="number" min="0" step="0.1" placeholder="输出，如 8">
+          </div>
+        </label>
         <div class="dock-row">
           <button class="btn btn-primary" id="btn-cfg-save"><span class="sym">check_circle</span>保存并连接</button>
           <button class="btn btn-ghost" id="btn-cfg-test"><span class="sym">arrow_forward</span>测试连接</button>

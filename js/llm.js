@@ -29,14 +29,16 @@
       model: cfg.model || 'default',
       stream: true,
       temperature: typeof temperature === 'number' ? temperature : (cfg.temp ?? 0.7),
+      stream_options: { include_usage: true }, // 服务端不支持时回退重试
       messages: [
         ...(system ? [{ role: 'system', content: system }] : []),
         { role: 'user', content: user }
       ]
     };
 
-    // 单行 SSE 解析；遇到内容增量时累积 full 并回调
+    // 单行 SSE 解析；遇到内容增量时累积 full 并回调；捕获服务端 usage
     let full = '';
+    let usageSeen = null;
     const handleLine = (line) => {
       const t = line.trim();
       if (!t.startsWith('data:')) return;
@@ -44,6 +46,7 @@
       if (payload === '[DONE]') return;
       try {
         const json = JSON.parse(payload);
+        if (json.usage) usageSeen = { tin: json.usage.prompt_tokens || 0, tout: json.usage.completion_tokens || 0 };
         const delta = json.choices?.[0]?.delta?.content || '';
         if (delta) {
           full += delta;
@@ -54,9 +57,14 @@
 
     try {
       bump();
-      const res = await fetch(url, {
-        method: 'POST', headers, body: JSON.stringify(body), signal: ctrl.signal
-      });
+      const mkInit = (b) => ({ method: 'POST', headers, body: JSON.stringify(b), signal: ctrl.signal });
+      let res = await fetch(url, mkInit(body));
+      if (res.status === 400 && body.stream_options) {
+        // 个别兼容服务不认识 stream_options：去掉重试一次
+        const fallback = { ...body };
+        delete fallback.stream_options;
+        res = await fetch(url, mkInit(fallback));
+      }
 
       if (!res.ok) {
         let detail = '';
@@ -85,7 +93,11 @@
       if (buf.trim()) handleLine(buf); // 冲洗尾包
 
       if (!full) throw new Error('接口未返回任何内容。请检查模型名是否正确。');
-      return full;
+      const estTok = (s) => Math.max(1, Math.round(s.length / 1.7));
+      const usage = usageSeen
+        ? { tin: usageSeen.tin, tout: usageSeen.tout, est: false }
+        : { tin: estTok((system || '') + user), tout: estTok(full), est: true };
+      return { text: full, usage };
     } catch (err) {
       if (ctrl.signal.aborted) throw new Error('连接空闲超过 120 秒或被中断，请检查接口后重试。');
       throw err;
@@ -96,12 +108,12 @@
 
   /** 快速测试连接：发一条 1 token 的问候 */
   async function test() {
-    const text = await chat({
+    const r = await chat({
       system: '你是连通性测试器，只回复两个字：畅通',
       user: 'ping',
       temperature: 0
     });
-    return text.slice(0, 40);
+    return r.text.slice(0, 40);
   }
 
   window.NSLLM = { chat, test };

@@ -1,5 +1,6 @@
 # 自检产物（可用 python _check.py 重新生成）
 _shots/
+_tmp/
 
 # Python
 __pycache__/

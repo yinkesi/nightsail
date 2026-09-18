@@ -14,6 +14,9 @@
     s = s.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
     s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+    // 证据引用与待验证标记（点击徽章由 app.js 弹出来源）
+    s = s.replace(/\[资料(\d+)\]/g, '<sup class="cite" data-i="$1">$1</sup>');
+    s = s.replace(/\[待验证\]/g, '<span class="unverified" title="资料未覆盖的推断">待验证</span>');
     s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, text, url) => {
       // 仅放行安全协议，拦截 javascript:/data: 等注入
       if (!/^(https?:|mailto:|#|\/)/i.test(url)) return text;
