@@ -252,12 +252,14 @@
     return `项目名：${proj.name}\n一句话定位：${proj.pitch}\n\n${STAGE_PROMPT[stageId]}${kbctx}`;
   }
 
-  function typewriter(full, onTick, onDone) {
-    let i = 0;
+  // 打字机：按时间预算推进（而非按拍数），后台标签页被节流时也能按时完成
+  function typewriter(full, onTick, onDone, budgetMs = 3200) {
+    const t0 = performance.now();
     (function step() {
-      i = Math.min(full.length, i + 3 + (Math.random() * 5 | 0));
+      const p = Math.min(1, (performance.now() - t0) / budgetMs);
+      const i = Math.min(full.length, Math.ceil(full.length * p));
       onTick(full.slice(0, i));
-      if (i < full.length) setTimeout(step, 10);
+      if (i < full.length) setTimeout(step, 25);
       else onDone && onDone();
     })();
   }
